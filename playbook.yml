@@ -1,0 +1,18 @@
+---
+- hosts: all
+  sudo: true
+  vars:
+    document_root: /vagrant
+  pre_tasks:
+    - name: update apt cache
+      apt: update_cache=yes
+
+    - name: installing repo for Java 8 in Ubuntu
+      apt_repository: repo='ppa:openjdk-r/ppa'
+
+  roles:    
+     - hadoop
+     - role: geerlingguy.java
+       when: "ansible_os_family == 'Debian'"
+       java_packages:
+         - openjdk-8-jdk

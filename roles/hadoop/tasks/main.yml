@@ -1,0 +1,215 @@
+---
+- name: create a group called hadoop
+  group:
+    name: hadoop
+    state: present
+
+- name: add user
+  user:
+    name: hduser
+    comment: "Hadoop User"
+    shell: /bin/bash
+    groups: hadoop
+    append: yes
+    generate_ssh_key: yes
+    ## run command 'mkpasswd --method=sha-512' to create your own encrypted password ##
+    password: $6$FJCD6DfRWieE$XEb5U924ydsk8JW0bXhE1VWx5xs3hfQR/yla70Pi/GVdA37XJu36gpW2q3qm7DKJ9hGGuy.RYe6V3XvAa2cN7/
+    # ssh_key_type: id_rsa
+  register: newuser
+- debug:
+    var: newuser
+
+- name: copy ssh key
+  copy:
+    src: /Users/prem/.ssh/id_rsa.pub
+    dest: ~/.ssh/id_rsa.pub
+
+- name: add authorized_key
+  authorized_key:
+    user: hduser
+    state: present
+    key: "{{ newuser.ssh_public_key }}"
+
+- name: change ssh config
+  template:
+    src: ./files/ssh-setup.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    mode: '0600'
+    validate: /usr/sbin/sshd -t -f %s
+    backup: yes
+# restart sshd
+- service:
+    name: ssh
+    state: restarted
+
+- name: copy hadoop files
+  synchronize:
+    src: /Users/prem/Documents/ansible-tutorial/hadoop-ansible/hadoop-cluster/roles/hadoop/files/hadoop
+    dest: /usr/local
+    # owner: hduser
+    # group: hadoop
+
+- name: Check if the hadoop directory is already created(used during provisioning)
+  stat: path=/usr/local/hadoop
+  register: p
+
+- name: change the owners and groups
+  file:
+    dest: /usr/local/hadoop
+    owner: hduser
+    group: hadoop
+    recurse: yes    
+    # when: not p.stat.exists
+# - name: copy hadoop files
+#   # become_user: hduser
+#   # become: yes
+#   synchronize:
+#     src: /vagrant/roles/hadoop/files/hadoop/
+#     dest: /usr/local/hadoop
+#     recursive: yes
+    # rysnc_path: "sudo rsync"
+    # delegate_to: delegate.host
+    # remote_src: yes 
+    # directory_mode: yes
+    # owner: hduser 
+    # group: hadoop
+
+
+
+
+#Hadoop code download - move it to hadoop once completed
+# - name: Download hadoop code
+#   get_url:
+#     url: http://apache.osuosl.org/hadoop/core/hadoop-2.8.1/hadoop-2.8.1.tar.gz 
+#     dest: /home/hduser/hadoop-2.8.1.tar.gz
+#     mode: 0440    
+
+# - name: Unarchive a file that is already on the remote machine
+#   unarchive:
+#     src: /home/hduser/hadoop-2.8.1.tar.gz
+#     dest: /usr/local/ 
+#     creates: /usr/local/hadoop 
+#     owner: hduser 
+#     group: hadoop
+#     copy: no
+
+# - name: Check if the hadoop directory is already created(used during provisioning)
+#   stat: path=/usr/local/hadoop
+#   register: p
+    
+
+# - name: Move hadoop version to hadoop folder
+#   command: mv /usr/local/hadoop-2.8.1 /usr/local/hadoop
+#   when: not p.stat.exists
+
+# - name: change to hduser
+#   shell: sudo su - hduser
+
+- name: Setting 
+  # become_user: hduser
+  lineinfile: 
+    dest: /home/hduser/.bashrc 
+    line: 'export HADOOP_HOME=/usr/local/hadoop' 
+    insertafter: 'EOF' 
+    regexp: 'export HADOOP_HOME=/usr/local/hadoop' 
+    state: present
+
+- name: Adding the path in the bashrc files
+  become_user: hduser
+  become: yes
+  lineinfile: 
+    dest: /home/hduser/.bashrc 
+    line:   'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' 
+    insertafter: 'EOF' 
+    regexp: 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' 
+    state: present
+
+- name: Adding the path in the bashrc files
+  become_user: hduser
+  become: yes
+  lineinfile: 
+    dest: /home/hduser/.bashrc 
+    line:   'export PATH=$PATH:$HADOOP_HOME/bin' 
+    insertafter: 'EOF' 
+    regexp: 'export PATH=$PATH:$HADOOP_HOME/bin' 
+    state: present
+
+- name: print the bashrc file
+  become_user: hduser
+  become: yes
+  shell: cat /home/hduser/.bashrc
+  register: catvar
+  args:
+    executable: /bin/bash
+
+- debug:
+    var: catvar
+
+- name: Source the bashrc file
+  become_user: hduser
+  become: yes
+  shell: source /home/hduser/.bashrc;env
+  register: sourcevar
+  args:
+    executable: /bin/bash
+
+- debug:
+    var: sourcevar
+
+
+- name: create directory /app/hadoop/tmp
+  file:
+    path: /app/hadoop/tmp
+    state: directory
+    owner: hduser
+    group: hadoop
+    mode: 0750
+    recurse: yes
+
+- name: set core site xml
+  template:
+    src: ./files/core-site.j2
+    dest: /usr/local/hadoop/etc/hadoop/core-site.xml
+    owner: hduser
+    group: hadoop
+    
+- name: set hdfs site xml
+  template:
+    src: ./files/hdfs-site.j2
+    dest: /usr/local/hadoop/etc/hadoop/hdfs-site.xml
+    owner: hduser
+    group: hadoop
+    
+- name: set mapred site xml
+  template:
+    src: ./files/mapred-site.j2
+    dest: /usr/local/hadoop/etc/hadoop/mapred-site.xml
+    owner: hduser
+    group: hadoop
+
+- name: create directory /tmp/gutenberg
+  file:
+    path: /tmp/gutenberg
+    state: directory
+    owner: hduser
+    group: hadoop
+    mode: 0750
+    recurse: yes
+
+- name: Download the book content to run the map reduce job
+  get_url:
+    url: http://www.gutenberg.org/cache/epub/20417/pg20417.txt
+    dest: /tmp/gutenberg
+    owner: hduser
+    group: hadoop
+
+# - name: copy book directory
+#   copy:
+#     src: /Users/prem/.ssh/id_rsa.pub
+#     dest: /usr/local/hadoop 
+
+
+
+    
+                        
