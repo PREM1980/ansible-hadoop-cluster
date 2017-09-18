@@ -34,7 +34,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       end
       node.vm.hostname = "node#{i}"
       node.vm.provision :ansible do |ansible|
-        # ansible.verbose = 'vvvv'
+        ansible.verbose = 'vvvv'
         ansible.playbook = "playbook.yml"
         # ansible.extra_vars = { ansible_ssh_user: 'vagrant' }
       end      
